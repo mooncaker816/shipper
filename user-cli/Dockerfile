@@ -5,4 +5,6 @@ WORKDIR /app
 
 ADD user-cli /app/user-cli
 
+ENTRYPOINT ["./user-cli"]
+
 CMD ["./user-cli"]
