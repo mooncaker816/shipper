@@ -1,58 +1,88 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/micro/go-micro"
 	pb "github.com/mooncaker816/shipper/vessel-service/proto/vessel"
 )
 
-type Repository interface {
-	FindAvailable(*pb.Specification) (*pb.Vessel, error)
-}
+const (
+	defaultHost = "localhost:27017"
+)
 
-type VesselRepository struct {
-	vessels []*pb.Vessel
-}
+// type Repository interface {
+// 	FindAvailable(*pb.Specification) (*pb.Vessel, error)
+// }
 
-// FindAvailable - checks a specification against a map of vessels,
-// if capacity and max weight are below a vessels capacity and max weight,
-// then return that vessel.
-func (repo *VesselRepository) FindAvailable(spec *pb.Specification) (*pb.Vessel, error) {
-	for _, vessel := range repo.vessels {
-		if spec.Capacity <= vessel.Capacity && spec.MaxWeight <= vessel.MaxWeight {
-			return vessel, nil
-		}
-	}
-	return nil, errors.New("No vessel found by that spec")
-}
+// type VesselRepository struct {
+// 	vessels []*pb.Vessel
+// }
+
+// // FindAvailable - checks a specification against a map of vessels,
+// // if capacity and max weight are below a vessels capacity and max weight,
+// // then return that vessel.
+// func (repo *VesselRepository) FindAvailable(spec *pb.Specification) (*pb.Vessel, error) {
+// 	for _, vessel := range repo.vessels {
+// 		if spec.Capacity <= vessel.Capacity && spec.MaxWeight <= vessel.MaxWeight {
+// 			return vessel, nil
+// 		}
+// 	}
+// 	return nil, errors.New("No vessel found by that spec")
+// }
 
 // Our grpc service handler
-type service struct {
-	repo Repository
-}
+// type service struct {
+// 	repo Repository
+// }
 
-func (s *service) FindAvailable(ctx context.Context, req *pb.Specification, res *pb.Response) error {
+// func (s *service) FindAvailable(ctx context.Context, req *pb.Specification, res *pb.Response) error {
 
-	// Find the next available vessel
-	vessel, err := s.repo.FindAvailable(req)
-	if err != nil {
-		return err
+// 	// Find the next available vessel
+// 	vessel, err := s.repo.FindAvailable(req)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	// Set the vessel as part of the response message type
+// 	res.Vessel = vessel
+// 	return nil
+// }
+func createDummyData(repo Repository) {
+	defer repo.Close()
+	vessels := []*pb.Vessel{
+		{Id: "vessel001", Name: "Kane's Salty Secret", MaxWeight: 200000, Capacity: 500},
 	}
-
-	// Set the vessel as part of the response message type
-	res.Vessel = vessel
-	return nil
+	for _, v := range vessels {
+		log.Printf("sssssss:%v", repo.Create(v))
+	}
 }
 
 func main() {
-	vessels := []*pb.Vessel{
-		&pb.Vessel{Id: "vessel001", Name: "Kane's Salty Secret", MaxWeight: 200000, Capacity: 500},
-	}
-	repo := &VesselRepository{vessels}
+	// vessels := []*pb.Vessel{
+	// 	&pb.Vessel{Id: "vessel001", Name: "Kane's Salty Secret", MaxWeight: 200000, Capacity: 500},
+	// }
+	// repo := &VesselRepository{vessels}
+	host := os.Getenv("DB_HOST")
 
+	if host == "" {
+		host = defaultHost
+	}
+
+	session, err := CreateSession(host)
+	if err != nil {
+
+		// We're wrapping the error returned from our CreateSession
+		// here to add some context to the error.
+		log.Panicf("Could not connect to datastore with host %s - %v", host, err)
+	}
+	// Mgo creates a 'master' session, we need to end that session
+	// before the main function closes.
+	defer session.Close()
+	// repo := &VesselRepository{session.Copy()}
+	// createDummyData(repo)
 	srv := micro.NewService(
 		micro.Name("go.micro.srv.vessel"),
 		micro.Version("latest"),
@@ -61,7 +91,7 @@ func main() {
 	srv.Init()
 
 	// Register our implementation with
-	pb.RegisterVesselServiceHandler(srv.Server(), &service{repo})
+	pb.RegisterVesselServiceHandler(srv.Server(), &service{session})
 
 	if err := srv.Run(); err != nil {
 		fmt.Println(err)

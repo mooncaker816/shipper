@@ -1,9 +1,9 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
+	"os"
 
 	vessel "github.com/mooncaker816/shipper/vessel-service/proto/vessel"
 
@@ -11,68 +11,87 @@ import (
 	pb "github.com/mooncaker816/shipper/consignment-service/proto/consignment"
 )
 
-type Repository interface {
-	Create(*pb.Consignment) (*pb.Consignment, error)
-	GetAll() ([]*pb.Consignment, error)
-}
+const (
+	defaultHost = "localhost:27017"
+)
 
-type ConsignmentRepository struct {
-	consignments []*pb.Consignment
-}
+// type Repository interface {
+// 	Create(*pb.Consignment) (*pb.Consignment, error)
+// 	GetAll() ([]*pb.Consignment, error)
+// }
 
-func (repo *ConsignmentRepository) Create(consignment *pb.Consignment) (*pb.Consignment, error) {
-	repo.consignments = append(repo.consignments, consignment)
-	return consignment, nil
-}
-func (repo *ConsignmentRepository) GetAll() ([]*pb.Consignment, error) {
-	return repo.consignments, nil
-}
+// type ConsignmentRepository struct {
+// 	consignments []*pb.Consignment
+// }
 
-type service struct {
-	repo         Repository
-	vesselClient vessel.VesselServiceClient
-}
+// func (repo *ConsignmentRepository) Create(consignment *pb.Consignment) (*pb.Consignment, error) {
+// 	repo.consignments = append(repo.consignments, consignment)
+// 	return consignment, nil
+// }
+// func (repo *ConsignmentRepository) GetAll() ([]*pb.Consignment, error) {
+// 	return repo.consignments, nil
+// }
 
-func (s *service) CreateConsignment(ctx context.Context, req *pb.Consignment, res *pb.Response) error {
-	// Here we call a client instance of our vessel service with our consignment weight,
-	// and the amount of containers as the capacity value
-	vesselResponse, err := s.vesselClient.FindAvailable(context.Background(), &vessel.Specification{
-		MaxWeight: req.Weight,
-		Capacity:  int32(len(req.Containers)),
-	})
-	log.Printf("Found vessel: %s \n", vesselResponse.Vessel.Name)
-	if err != nil {
-		return err
-	}
+// type service struct {
+// 	repo         Repository
+// 	vesselClient vessel.VesselServiceClient
+// }
 
-	// We set the VesselId as the vessel we got back from our
-	// vessel service
-	req.VesselId = vesselResponse.Vessel.Id
-	consi, err := s.repo.Create(req)
-	if err != nil {
-		return err
-	}
-	res.Created = true
-	res.Consignment = consi
-	return nil
-}
+// func (s *service) CreateConsignment(ctx context.Context, req *pb.Consignment, res *pb.Response) error {
+// 	// Here we call a client instance of our vessel service with our consignment weight,
+// 	// and the amount of containers as the capacity value
+// 	vesselResponse, err := s.vesselClient.FindAvailable(context.Background(), &vessel.Specification{
+// 		MaxWeight: req.Weight,
+// 		Capacity:  int32(len(req.Containers)),
+// 	})
+// 	log.Printf("Found vessel: %s \n", vesselResponse.Vessel.Name)
+// 	if err != nil {
+// 		return err
+// 	}
 
-func (s *service) GetConsignments(ctx context.Context, req *pb.GetRequest, res *pb.Response) error {
-	consignments, err := s.repo.GetAll()
-	if err != nil {
-		return err
-	}
-	res.Consignments = consignments
-	return nil
-}
+// 	// We set the VesselId as the vessel we got back from our
+// 	// vessel service
+// 	req.VesselId = vesselResponse.Vessel.Id
+// 	consi, err := s.repo.Create(req)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	res.Created = true
+// 	res.Consignment = consi
+// 	return nil
+// }
+
+// func (s *service) GetConsignments(ctx context.Context, req *pb.GetRequest, res *pb.Response) error {
+// 	consignments, err := s.repo.GetAll()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	res.Consignments = consignments
+// 	return nil
+// }
 
 func main() {
-	repo := &ConsignmentRepository{}
-	// lis, err := net.Listen("tcp", port) //监听端口
-	// if err != nil {
-	// 	log.Fatalf("failed to listen port %v", port)
-	// }
-	// server := grpc.NewServer()                               // grpc server
+	//repo := &ConsignmentRepository{}
+	// Database host from the environment variables
+	host := os.Getenv("DB_HOST")
+
+	if host == "" {
+		host = defaultHost
+	}
+
+	session, err := CreateSession(host)
+
+	// Mgo creates a 'master' session, we need to end that session
+	// before the main function closes.
+	defer session.Close()
+
+	if err != nil {
+
+		// We're wrapping the error returned from our CreateSession
+		// here to add some context to the error.
+		log.Panicf("Could not connect to datastore with host %s - %v", host, err)
+	}
+
 	srv := micro.NewService(
 
 		// This name must match the package name given in your protobuf definition
@@ -85,7 +104,7 @@ func main() {
 	srv.Init()
 
 	// Register handler
-	pb.RegisterShippingServiceHandler(srv.Server(), &service{repo, vesselClient})
+	pb.RegisterShippingServiceHandler(srv.Server(), &service{session, vesselClient})
 
 	// Run the server
 	if err := srv.Run(); err != nil {
