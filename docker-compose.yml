@@ -46,6 +46,7 @@ services:
 
   user-cli:
     build: ./user-cli
+    entrypoint: ./user-cli
     environment:
       MICRO_REGISTRY: "mdns"
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 
@@ -9,14 +8,12 @@ import (
 	micro "github.com/micro/go-micro"
 	microclient "github.com/micro/go-micro/client"
 	"github.com/micro/go-micro/cmd"
+	"golang.org/x/net/context"
+
 	pb "github.com/mooncaker816/shipper/user-service/proto/user"
 )
 
 func main() {
-
-	cmd.Init()
-
-	client := pb.NewUserServiceClient("go.micro.srv.user", microclient.DefaultClient)
 
 	service := micro.NewService(
 		micro.Flags(
@@ -38,9 +35,11 @@ func main() {
 			},
 		),
 	)
+	cmd.Init()
+
+	client := pb.NewUserServiceClient("go.micro.srv.user", microclient.DefaultClient)
 
 	service.Init(
-
 		micro.Action(func(c *cli.Context) {
 
 			name := c.String("name")
@@ -71,4 +70,8 @@ func main() {
 			os.Exit(0)
 		}),
 	)
+	// Run the server
+	if err := service.Run(); err != nil {
+		log.Println(err)
+	}
 }
