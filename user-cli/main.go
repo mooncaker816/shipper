@@ -65,7 +65,14 @@ func main() {
 			for _, v := range getAll.Users {
 				log.Println(v)
 			}
-
+			token, err := client.Auth(context.Background(), &pb.User{
+				Email:    email,
+				Password: password,
+			})
+			if err != nil {
+				log.Fatalf("could not auth: %v", err)
+			}
+			log.Println(token)
 			// let's just exit because
 			os.Exit(0)
 		}),

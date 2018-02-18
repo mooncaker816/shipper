@@ -9,6 +9,7 @@ type Repository interface {
 	Create(*pb.User) error
 	Get(string) (*pb.User, error)
 	GetAll() ([]*pb.User, error)
+	GetByEmail(string) (*pb.User, error)
 }
 
 // Create(context.Context, *User, *Response) error
@@ -45,4 +46,13 @@ func (repo *UserRepository) GetAll() ([]*pb.User, error) {
 		return nil, err
 	}
 	return users, nil
+}
+
+func (repo *UserRepository) GetByEmail(email string) (*pb.User, error) {
+	var user pb.User
+	err := repo.db.Where("email = ?", email).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }

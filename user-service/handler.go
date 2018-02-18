@@ -1,17 +1,25 @@
 package main
 
 import (
-	"context"
+	"golang.org/x/net/context"
+
+	"golang.org/x/crypto/bcrypt"
 
 	pb "github.com/mooncaker816/shipper/user-service/proto/user"
 )
 
 type service struct {
 	repo Repository
+	auth Authable
 }
 
 func (s *service) Create(ctx context.Context, user *pb.User, res *pb.Response) error {
-	err := s.repo.Create(user)
+	hashPSW, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	user.Password = string(hashPSW)
+	err = s.repo.Create(user)
 	if err != nil {
 		return err
 	}
@@ -37,7 +45,20 @@ func (s *service) GetAll(ctx context.Context, req *pb.Request, res *pb.Response)
 	return nil
 }
 
-func (s *service) Auth(ctx context.Context, user *pb.User, tok *pb.Token) error {
+func (s *service) Auth(ctx context.Context, req *pb.User, tok *pb.Token) error {
+	user, err := s.repo.GetByEmail(req.Email)
+	if err != nil {
+		return err
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+	if err != nil {
+		return err
+	}
+	token, err := s.auth.Encode(user)
+	if err != nil {
+		return err
+	}
+	tok.Token = token
 	return nil
 }
 
