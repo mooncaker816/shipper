@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 
@@ -8,12 +9,16 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/micro/go-micro/broker"
 	pb "github.com/mooncaker816/shipper/user-service/proto/user"
 )
 
+const topic = "user.created"
+
 type service struct {
-	repo Repository
-	auth Authable
+	repo   Repository
+	auth   Authable
+	PubSub broker.Broker
 }
 
 func (s *service) Create(ctx context.Context, user *pb.User, res *pb.Response) error {
@@ -27,6 +32,9 @@ func (s *service) Create(ctx context.Context, user *pb.User, res *pb.Response) e
 		return err
 	}
 	res.User = user
+	if err := s.publishEvent(user); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -89,3 +97,26 @@ func (s *service) ValidateToken(ctx context.Context, tok1 *pb.Token, tok2 *pb.To
 // GetAll(context.Context, *Request, *Response) error
 // Auth(context.Context, *User, *Token) error
 // ValidateToken(context.Context, *Token, *Token) error
+
+func (s *service) publishEvent(user *pb.User) error {
+	// Marshal to JSON string
+	body, err := json.Marshal(user)
+	if err != nil {
+		return err
+	}
+
+	// Create a broker message
+	msg := &broker.Message{
+		Header: map[string]string{
+			"id": user.Id,
+		},
+		Body: body,
+	}
+
+	// Publish message to broker
+	if err := s.PubSub.Publish(topic, msg); err != nil {
+		log.Printf("[pub] failed: %v", err)
+	}
+
+	return nil
+}
