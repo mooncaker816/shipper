@@ -6,7 +6,10 @@ import (
 	"log"
 	"os"
 
+	"github.com/micro/cli"
+	micro "github.com/micro/go-micro"
 	microclient "github.com/micro/go-micro/client"
+	"github.com/micro/go-micro/metadata"
 
 	"golang.org/x/net/context"
 
@@ -38,26 +41,56 @@ func main() {
 	// 	log.Fatalf("dial failed %v", err)
 	// }
 	// defer conn.Close()
+	service := micro.NewService(
+		micro.Flags(
+			cli.StringFlag{
+				Name:  "file",
+				Usage: "consignment file name",
+			},
+			cli.StringFlag{
+				Name:  "token",
+				Usage: "token string",
+			},
+		),
+	)
+
 	cmd.Init()
 	client := pb.NewShippingServiceClient("go.micro.srv.consignment", microclient.DefaultClient)
-	file := defaultFilename
-	if len(os.Args) > 1 {
-		file = os.Args[1]
-	}
-	consignment, err := parseFile(file)
-	if err != nil {
-		log.Fatalf("parse failed %v", err)
-	}
-	res, err := client.CreateConsignment(context.TODO(), consignment)
-	if err != nil {
-		log.Fatalf("can not create consignment: %v", err)
-	}
-	log.Printf("Created: %v", res.Consignment)
-	res, err = client.GetConsignments(context.Background(), &pb.GetRequest{})
-	if err != nil {
-		log.Fatalf("can not get consignments: %v", err)
-	}
-	for _, v := range res.Consignments {
-		log.Println(v)
+	var file, token string
+	service.Init(
+		micro.Action(func(c *cli.Context) {
+
+			file = c.String("file")
+			token = c.String("token")
+			log.Printf("input token: %s", token)
+			if len(file) <= 0 {
+				file = defaultFilename
+			}
+			consignment, err := parseFile(file)
+			if err != nil {
+				log.Fatalf("parse failed %v", err)
+			}
+			ctx := metadata.NewContext(context.Background(), map[string]string{
+				"token": token,
+			})
+
+			res, err := client.CreateConsignment(ctx, consignment)
+			if err != nil {
+				log.Fatalf("can not create consignment: %v", err)
+			}
+			log.Printf("Created: %v", res.Consignment)
+			res, err = client.GetConsignments(ctx, &pb.GetRequest{})
+			if err != nil {
+				log.Fatalf("can not get consignments: %v", err)
+			}
+			for _, v := range res.Consignments {
+				log.Println(v)
+			}
+			// let's just exit because
+			os.Exit(0)
+		}),
+	)
+	if err := service.Run(); err != nil {
+		log.Println(err)
 	}
 }

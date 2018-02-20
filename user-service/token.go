@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -32,13 +33,14 @@ type TokenService struct {
 }
 
 // Decode a token string into a token object
-func (srv *TokenService) Decode(token string) (*CustomClaims, error) {
+func (srv *TokenService) Decode(tokenString string) (*CustomClaims, error) {
 
 	// Parse the token
-	tokenType, err := jwt.ParseWithClaims(string(key), &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+	tokenType, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return key, nil
 	})
-
+	log.Println(tokenType)
+	log.Println(err)
 	// Validate the token and return the custom claims
 	if claims, ok := tokenType.Claims.(*CustomClaims); ok && tokenType.Valid {
 		return claims, nil
